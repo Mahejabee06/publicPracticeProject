@@ -1,2 +1,61 @@
-This is 1st line
-This is seceond in file
+
+pipeline{
+    tools{
+        maven 'mymaven'
+    }
+    agent any
+    triggers {
+        pollSCM('* * * * *')
+    }
+    environment{
+        DOCKER_USERNAME = "mahejabee"
+        DOCKER_REPONAME = "repodocker"
+        DOCKER_IMAGE_TAG = "v.${BUILD_NUMBER}"
+        DOCKER_ACCESS_TOKEN = credentials('dockercred')
+    }
+    
+    stages{
+        
+        stage('Stop all running container'){
+            steps{
+            sh 'docker stop $(docker ps -q)'
+            }
+        }
+        stage('CheckOut Code'){
+            steps{
+                git 'https://github.com/Mahejabee06/DevOpsCodeDemo.git'
+            }
+        }
+        stage('Build Code'){
+           steps {
+                sh 'mvn package'
+            }
+        }
+        
+        stage('Copy Build'){
+            steps{
+                sh 'cp /var/lib/jenkins/workspace/Project2PipeLineDocker/target/addressbook.war .'
+            }
+        }
+        
+        stage('Build Image'){
+           steps {
+                sh 'docker build -t myimage:$DOCKER_IMAGE_TAG .'
+            }
+        }
+        stage('Push Image'){
+            steps{
+                sh 'echo ${DOCKER_ACCESS_TOKEN} | docker login --username ${DOCKER_USERNAME} --password-stdin'
+               sh 'docker tag myimage:$DOCKER_IMAGE_TAG ${DOCKER_USERNAME}/${DOCKER_REPONAME}:$DOCKER_IMAGE_TAG'
+               sh 'docker push ${DOCKER_USERNAME}/${DOCKER_REPONAME}:$DOCKER_IMAGE_TAG'
+
+                }
+        }
+        stage('Continuous Deployment'){
+            steps{
+                sh 'docker pull ${DOCKER_USERNAME}/${DOCKER_REPONAME}:$DOCKER_IMAGE_TAG'
+                sh 'docker run -d -P ${DOCKER_USERNAME}/${DOCKER_REPONAME}:$DOCKER_IMAGE_TAG'
+            }
+        }
+    }
+}
